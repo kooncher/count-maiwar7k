@@ -75,6 +75,19 @@ summary .nums b.zero{color:var(--warn)}
 .seg button{border:0;background:none;border-radius:8px;padding:8px;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--soft);color:var(--fg);font-weight:600}
 .ro .w{display:none!important}
+/* denser layout: wide screens get a grid of compact cards instead of one long column */
+main{max-width:1100px}
+#v-log{max-width:640px;width:100%;margin-inline:auto}
+section>.row{max-width:640px}
+#dash,.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;background:none;border:0;align-items:start}
+#dash details,.list li{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+#dash details:last-child,.list li:last-child{border-bottom:1px solid var(--line)}
+#dash>.hint,.list .empty{grid-column:1/-1}
+summary{padding:8px 12px;gap:2px 8px}
+.who{padding:0 12px 10px}
+.list li{padding:6px 6px 6px 12px}
+.sum b{font-size:22px}
+.seg{max-width:360px}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 [hidden]{display:none!important}
 body{margin:0}
@@ -125,6 +138,12 @@ body{margin:0}
 
   <section id="v-heroes" hidden>
     <form class="row w" id="f-heroes"><input id="i-heroes" placeholder="ชื่อตัวละครใหม่" autocomplete="off"><button class="btn primary">เพิ่ม</button></form>
+    <div class="card" id="imgBar" hidden>
+      <b id="imgFor"></b>
+      <p class="hint">แคปรูปแล้วกด Ctrl+V · มือถือกด "เลือกรูป" · หรือวางลิงก์รูปก็ได้</p>
+      <div class="row"><input id="imgPaste" placeholder="วางรูปตรงนี้ (Ctrl+V)" autocomplete="off"><label class="btn" style="display:inline-flex;align-items:center;color:var(--fg);font-size:15px;cursor:pointer">เลือกรูป<input type="file" id="imgFile" accept="image/*" hidden></label></div>
+      <div class="row"><button class="btn" id="imgDel" style="color:var(--warn)">ลบรูป</button><button class="btn" id="imgCancel">ปิด</button></div>
+    </div>
     <span class="count" id="c-heroes"></span>
     <ul class="list" id="l-heroes"></ul>
   </section>
@@ -171,15 +190,49 @@ addEventListener('hashchange', route);
 const pic = (h, inner) => h?.img
   ? (inner ? `<img class="av lg" src="${esc(h.img)}" alt="" loading="lazy">` : `<img class="av" src="${esc(h.img)}" alt="" loading="lazy">`)
   : (inner ? esc((h?.name || '?')[0]) : `<span class="av">${esc((h?.name || '?')[0])}</span>`);
-$('l-heroes').addEventListener('click', async e => {
+// Image picker: tap a thumbnail, then paste a screenshot (Ctrl+V), pick a file, or paste a link.
+let imgTarget = null;
+$('l-heroes').addEventListener('click', e => {
   const b = e.target.closest('[data-img]'); if (!b) return;
-  const h = H.get(b.dataset.img);
-  const url = prompt(`วางลิงก์รูปของ ${h.name} (เว้นว่างเพื่อลบรูป)`, h.img || '');
-  if (url === null) return;
-  const v = url.trim();
-  if (v && !/^https:\/\//.test(v)) return toast('ลิงก์รูปต้องขึ้นต้นด้วย https://');
-  try { ok(await db.from('heroes').update({ img: v || null }).eq('id', h.id)); toast('อัปเดตรูปแล้ว'); refresh(); } catch (err) { fail(err); }
+  imgTarget = b.dataset.img;
+  $('imgFor').textContent = 'ใส่รูปให้: ' + H.get(imgTarget).name;
+  $('imgBar').hidden = false; $('imgPaste').value = ''; $('imgPaste').focus();
+  $('imgBar').scrollIntoView({ block: 'nearest' });
 });
+async function setImg(v) {
+  if (!imgTarget) return;
+  try {
+    ok(await db.from('heroes').update({ img: v }).eq('id', imgTarget));
+    toast(v ? 'ใส่รูปแล้ว' : 'ลบรูปแล้ว'); $('imgBar').hidden = true; imgTarget = null; refresh();
+  } catch (err) { fail(err); }
+}
+// Center-crop to a square and shrink to 96px so each picture stays a few KB in the database.
+function shrink(file) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => {
+      const s = Math.min(im.width, im.height), c = document.createElement('canvas');
+      c.width = c.height = 96;
+      c.getContext('2d').drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 96, 96);
+      URL.revokeObjectURL(im.src); res(c.toDataURL('image/jpeg', 0.85));
+    };
+    im.onerror = rej; im.src = URL.createObjectURL(file);
+  });
+}
+async function useFile(f) {
+  if (!f || !f.type.startsWith('image/')) return toast('ไม่ใช่ไฟล์รูป');
+  try { await setImg(await shrink(f)); } catch { toast('อ่านรูปไม่ได้'); }
+}
+document.addEventListener('paste', e => {
+  if (!imgTarget) return;
+  const f = [...e.clipboardData.files][0];
+  if (f) { e.preventDefault(); useFile(f); return; }
+  const t = e.clipboardData.getData('text').trim();
+  if (/^https:\/\//.test(t)) { e.preventDefault(); setImg(t); }
+});
+$('imgFile').addEventListener('change', e => useFile(e.target.files[0]));
+$('imgDel').addEventListener('click', () => setImg(null));
+$('imgCancel').addEventListener('click', () => { $('imgBar').hidden = true; imgTarget = null; });
 function renderList(kind, map, unit) {
   const items = [...map].sort(byName);
   $('c-' + kind).textContent = `ทั้งหมด ${items.length} ${unit}`;
