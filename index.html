@@ -4,157 +4,337 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ไม้ War</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap">
 <style>
-/* layout: pick player -> big counter -> tap tiles per group; round + edit tucked in the header */
-:root{--bg:#f5f6f8;--panel:#fff;--fg:#1b2026;--muted:#6a7380;--line:#e2e5ea;--accent:#2f6fde;--g0:#cf3a3a;--g1:#2f6fde;--g2:#c97d12;--g3:#9343c4;--font:"IBM Plex Sans Thai",system-ui,-apple-system,sans-serif}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111316;--panel:#191c20;--fg:#e6e9ed;--muted:#8a93a0;--line:#2a2f36;--accent:#6c9cf6;--g0:#f07575;--g1:#6c9cf6;--g2:#eeae4c;--g3:#c78cf0;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#111316;--panel:#191c20;--fg:#e6e9ed;--muted:#8a93a0;--line:#2a2f36;--accent:#6c9cf6;--g0:#f07575;--g1:#6c9cf6;--g2:#eeae4c;--g3:#c78cf0;color-scheme:dark}
+/* layout: four tabs (log, dashboard, members, characters) in one narrow column; each tab does one job */
+:root{--bg:#f5f6f8;--panel:#fff;--fg:#1b2026;--muted:#6a7380;--line:#e2e5ea;--accent:#2f6fde;--soft:#e8effc;--warn:#cf3a3a;--ok:#1f8a5b;--font:"IBM Plex Sans Thai",system-ui,-apple-system,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111316;--panel:#191c20;--fg:#e6e9ed;--muted:#8a93a0;--line:#2a2f36;--accent:#6c9cf6;--soft:#1e2a40;--warn:#f07575;--ok:#4cc38a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111316;--panel:#191c20;--fg:#e6e9ed;--muted:#8a93a0;--line:#2a2f36;--accent:#6c9cf6;--soft:#1e2a40;--warn:#f07575;--ok:#4cc38a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 64px}
+main{max-width:640px;margin:0 auto;display:grid;gap:16px}
+h1{font-size:20px;font-weight:600;margin:0}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav{display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+nav a{text-align:center;padding:8px 4px;border-radius:9px;color:var(--muted);text-decoration:none;font-size:14px;white-space:nowrap}
+nav a[aria-current="page"]{background:var(--fg);color:var(--bg);font-weight:600}
+section{display:grid;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px}
+label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;width:100%;box-sizing:border-box;min-width:0}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 16px;white-space:nowrap;flex:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn:disabled{opacity:.45;cursor:default}
+.search{position:relative}
+.sug{list-style:none;margin:4px 0 0;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;display:grid}
+.sug button{all:unset;cursor:pointer;padding:10px 12px;border-radius:8px}
+.sug button:hover,.sug button:focus-visible,.sug li:first-child button{background:var(--soft)}
+.sug b{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--soft);border:0;border-radius:999px;padding:6px 8px 6px 12px;font-size:14px}
+.chip span{color:var(--muted);font-size:16px;line-height:1}
+.chip.plain{padding:4px 10px;background:var(--bg);border:1px solid var(--line)}
+.chip.gone{color:var(--muted);text-decoration:line-through}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.list{list-style:none;margin:0;padding:0;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.list li{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--line)}
+.list li:last-child{border-bottom:0}
+.list li>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.del{border:0;background:none;color:var(--muted);padding:6px 8px;border-radius:8px;font-size:13px}
+.del[data-armed="1"]{color:#fff;background:var(--warn)}
+.empty{color:var(--muted)}
+.count{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.sum{display:flex;gap:16px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.sum div{display:grid}
+.sum b{font-size:28px;line-height:1.1;font-weight:600}
+.sum span{font-size:12px;color:var(--muted)}
+details{border-bottom:1px solid var(--line)}
+details:last-child{border-bottom:0}
+summary{list-style:none;cursor:pointer;padding:12px 16px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary .nm{font-weight:600;overflow-wrap:anywhere;min-width:0}
+summary .nums{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);text-align:right}
+summary .nums b{color:var(--fg);font-size:16px}
+summary .nums b.zero{color:var(--warn)}
+.bar{grid-column:1/-1;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.who{padding:0 16px 14px;display:grid;gap:8px}
+.who p{margin:0;font-size:12px;color:var(--muted)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;max-width:calc(100% - 32px);text-align:center}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{border:0;background:none;border-radius:8px;padding:8px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--soft);color:var(--fg);font-weight:600}
+.ro .w{display:none!important}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 [hidden]{display:none!important}
-body{margin:0;font-size:14px;background:var(--bg);color:var(--fg);font-family:var(--font);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 48px}
-main{max-width:720px;margin:0 auto;display:grid;gap:16px}
-button,select{font:inherit;color:inherit;cursor:pointer}
-button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.top{display:flex;align-items:center;gap:8px}
-h1{font-size:20px;font-weight:600;margin:0;flex:1}
-select{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:14px;max-width:50vw}
-.btn{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 14px;white-space:nowrap;font-size:14px}
-.users{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
-.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:8px 16px;white-space:nowrap;font-size:15px}
-.chip[aria-current="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
-.count{display:flex;align-items:baseline;gap:10px;font-variant-numeric:tabular-nums}
-.count b{font-size:40px;line-height:1;font-weight:600}
-.count span{color:var(--muted)}
-.status{font-size:12px;color:var(--muted);margin-left:auto}
-.grp h2{font-size:12px;letter-spacing:.06em;font-weight:600;margin:0 0 8px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
-.tile{position:relative;min-height:52px;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);padding:8px 10px;text-align:left;font-size:15px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
-.tile[aria-pressed="true"]{background:var(--c);border-color:var(--c);color:#fff}
-.tile[aria-pressed="true"]::after{content:"✓";position:absolute;top:6px;right:8px;font-size:13px}
-.edit{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.edit label{display:grid;gap:4px;font-size:12px;color:var(--muted);min-width:0}
-textarea,input{font:inherit;font-size:14px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}
-textarea{min-height:220px;resize:vertical}
-.actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn.danger{color:var(--g0)}
-@media (prefers-reduced-motion:no-preference){.tile{transition:background .12s,border-color .12s}}
+body{margin:0}
 </style>
 </head>
 <body>
 <main>
-  <div class="top">
-    <h1>ไม้ War</h1>
-    <select id="round" aria-label="รอบ"></select>
-    <button class="btn" id="toggleEdit">แก้ไข</button>
-  </div>
-  <div class="users" id="users"></div>
-  <div class="count"><b id="used">0</b><span id="of">ใช้ไปแล้ว</span><span class="status" id="status"></span></div>
-  <div id="grid" style="display:grid;gap:18px"></div>
-  <section class="edit" id="edit" hidden>
-    <label>ชื่อรอบ<input id="roundName"></label>
-    <label>ผู้เล่น (บรรทัดละคน)<textarea id="players"></textarea></label>
-    <label>ตัวละคร (ขึ้นกลุ่มใหม่ด้วย # ชื่อกลุ่ม)<textarea id="heroes"></textarea></label>
-    <div class="actions">
-      <button class="btn primary" id="applyEdit">บันทึกการแก้ไข</button>
-      <button class="btn" id="addRound">+ เริ่มรอบใหม่</button>
-      <button class="btn danger" id="clearRound">ล้างติ๊กรอบนี้</button>
-      <button class="btn danger" id="delRound">ลบรอบนี้</button>
+  <div class="row" style="align-items:baseline"><h1>ไม้ War</h1><span class="hint" id="state" style="text-align:right">กำลังโหลด…</span></div>
+  <nav>
+    <a href="#log" class="w">บันทึก</a>
+    <a href="#dash">สรุป</a>
+    <a href="#members">สมาชิก</a>
+    <a href="#heroes">ตัวละคร</a>
+  </nav>
+
+  <section id="v-log" hidden>
+    <div class="card">
+      <div class="row">
+        <label>วันวอ<input type="date" id="date"></label>
+        <label>สมาชิก<select id="member"></select></label>
+      </div>
+      <div class="search">
+        <label>ตัวละครที่ใช้<input id="q" placeholder="พิมพ์ชื่อ เช่น ลิ" autocomplete="off" enterkeyhint="done"></label>
+        <ul class="sug" id="sug" hidden></ul>
+      </div>
+      <div class="chips" id="picked"></div>
+      <p class="hint" id="pickHint"></p>
+      <button class="btn primary" id="save" disabled>บันทึก</button>
     </div>
   </section>
-</main>
 
-<script type="application/json" id="state">{"players":["Fake1ToTwo","Kyoran","Qwerty02","คิดดีมั้ย","Mirowastaken","AOFTONGJ"],"groups":[{"name":"แดง","heroes":["ลิปโป","แฝด","ไคล์","เทโอ","คารุระ","แรนกริด","ไพร","ไรอัน","เอมิเลีย","คาเสรอน","ไคล์ (2)","ซอริน","ทันจิโร่","เซ็นอิตสึ","ออก้า","บาลีสต้า"]},{"name":"น้ำเงิน","heroes":["เฟรยา","เรกิแนฟ","มิเลีย","โอมัก","รีน","ซงจินอู","ศิริเอล","ซิลเวสต้า","วาเนซซ่า","ยูนกอน"]},{"name":"ส้ม","heroes":["แซคกริด","ลูดี้","นีออ","อาไกล่า","ดาราภณ"]},{"name":"ม่วง","heroes":["ลีง","เกล","ธรูด","อไปด์","พารามอส","เอลิเซีย","เลย"]}],"rounds":[{"name":"รอบ 1","used":{"ลิปโป":["Fake1ToTwo"],"แฝด":["Fake1ToTwo"],"ไคล์":["Fake1ToTwo"],"ไพร":["Kyoran"],"ไรอัน":["Kyoran"]}}]}</script>
+  <section id="v-dash" hidden>
+    <div class="row">
+      <label>วันวอ<select id="dDate"></select></label>
+      <label>ค้นหา<input id="dq" placeholder="ชื่อ" autocomplete="off"></label>
+    </div>
+    <div class="seg" id="by"><button data-by="hero" aria-pressed="true">ตัวละครที่เหลือ</button><button data-by="member" aria-pressed="false">ตามสมาชิก</button></div>
+    <div class="sum" id="sum"></div>
+    <div class="box" id="dash"></div>
+    <p class="hint" id="dHint"></p>
+  </section>
+
+  <section id="v-members" hidden>
+    <form class="row w" id="f-members"><input id="i-members" placeholder="ชื่อสมาชิกใหม่" autocomplete="off"><button class="btn primary">เพิ่ม</button></form>
+    <span class="count" id="c-members"></span>
+    <ul class="list" id="l-members"></ul>
+  </section>
+
+  <section id="v-heroes" hidden>
+    <form class="row w" id="f-heroes"><input id="i-heroes" placeholder="ชื่อตัวละครใหม่" autocomplete="off"><button class="btn primary">เพิ่ม</button></form>
+    <span class="count" id="c-heroes"></span>
+    <ul class="list" id="l-heroes"></ul>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
 
 <script>
-// Data lives in this browser's localStorage; the JSON block above is only the starting set.
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let S = JSON.parse($('state').textContent);
-try { const l = localStorage.getItem('maiwar'); if (l) S = JSON.parse(l); } catch {}
-let cur = S.rounds.length - 1, me = '';
-try { me = localStorage.getItem('maiwar-me') || ''; } catch {}
+const today = () => new Date().toLocaleDateString('sv'); // YYYY-MM-DD in local time
+const thDate = d => { const [y, m, dd] = d.split('-'); return `${+dd}/${+m}/${y.slice(2)}`; };
+const byName = (a, b) => a[1].name.localeCompare(b[1].name, 'th');
 
-function heroList() { return S.groups.flatMap(g => g.heroes); }
+// Supabase project settings (Project Settings > API). The anon key is meant to be public.
+const SUPABASE_URL = 'https://vtvcavbmbclnkcoaikxr.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0dmNhdmJtYmNsbmtjb2Fpa3hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQwOTgwMjksImV4cCI6MjEwOTY3NDAyOX0.QODu7CaPaAnv1-DCmeymH5NITHP8hRfFqQnTO8crG_8';
 
-function render() {
-  const used = S.rounds[cur].used;
-  if (!S.players.includes(me)) me = S.players[0] || '';
-  $('round').innerHTML = S.rounds.map((r, i) => `<option value="${i}"${i === cur ? ' selected' : ''}>${esc(r.name)}</option>`).join('');
-  $('users').innerHTML = S.players.map(p =>
-    `<button class="chip" data-u="${esc(p)}" aria-current="${p === me}">${esc(p)}</button>`).join('');
-  const total = heroList().length, n = Object.values(used).filter(a => a.includes(me)).length;
-  $('used').textContent = n;
-  $('of').textContent = `ใช้ไปแล้ว จาก ${total} ตัว`;
-  let idx = 0;
-  $('grid').innerHTML = S.groups.map((g, gi) =>
-    `<section class="grp" style="--c:var(--g${gi % 4})"><h2 style="color:var(--c)">${esc(g.name)}</h2><div class="tiles">` +
-    g.heroes.map(name => `<button class="tile" data-h="${idx++}" aria-pressed="${(used[name] || []).includes(me)}">${esc(name)}</button>`).join('') +
-    `</div></section>`).join('');
+let db = null, canWrite = true;
+const M = new Map(), H = new Map(); // id -> {name}
+let T = [];                          // tally rows: {id, date, member, heroes:[heroId]}
+let pick = [], dirty = false, saving = false, dashDate = today(), dashBy = 'hero';
+const ok = r => { if (r.error) throw r.error; return r; };
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2200);
+}
+function fail(e) {
+  toast(e && e.code === '23505' ? 'มีชื่อนี้อยู่แล้ว' : 'บันทึกไม่สำเร็จ ลองอีกครั้ง');
 }
 
-function save() {
-  try { localStorage.setItem('maiwar', JSON.stringify(S)); $('status').textContent = 'บันทึกแล้ว'; }
-  catch { $('status').textContent = 'บันทึกไม่ได้ (โหมดส่วนตัว?)'; }
+/* ---------- routing ---------- */
+const VIEWS = ['log', 'dash', 'members', 'heroes'];
+function route() {
+  let v = location.hash.slice(1);
+  if (!VIEWS.includes(v)) v = canWrite ? 'log' : 'dash';
+  VIEWS.forEach(x => $('v-' + x).hidden = x !== v);
+  document.querySelectorAll('nav a').forEach(a => a.setAttribute('aria-current', a.getAttribute('href') === '#' + v ? 'page' : 'false'));
 }
+addEventListener('hashchange', route);
 
-$('grid').addEventListener('click', e => {
-  const b = e.target.closest('[data-h]'); if (!b || !me) return;
-  const name = heroList()[+b.dataset.h], used = S.rounds[cur].used, a = used[name] || [];
-  used[name] = a.includes(me) ? a.filter(x => x !== me) : [...a, me];
-  if (!used[name].length) delete used[name];
-  render(); save();
+/* ---------- members / characters lists ---------- */
+function renderList(kind, map, unit) {
+  const items = [...map].sort(byName);
+  $('c-' + kind).textContent = `ทั้งหมด ${items.length} ${unit}`;
+  $('l-' + kind).innerHTML = items.map(([id, x]) =>
+    `<li><span>${esc(x.name)}</span>${canWrite ? `<button class="del" data-del="${id}" aria-label="ลบ ${esc(x.name)}">ลบ</button>` : ''}</li>`
+  ).join('') || `<li class="empty">ยังไม่มีรายชื่อ เพิ่มชื่อแรกด้านบน</li>`;
+}
+function setupList(kind, map) {
+  $('f-' + kind).addEventListener('submit', async e => {
+    e.preventDefault();
+    const inp = $('i-' + kind), name = inp.value.trim();
+    if (!name || !db) return;
+    if ([...map.values()].some(x => x.name === name)) return toast('มีชื่อนี้อยู่แล้ว');
+    inp.value = '';
+    try { ok(await db.from(kind).insert({ name })); toast('เพิ่ม ' + name + ' แล้ว'); refresh(); } catch (err) { fail(err); }
+  });
+  $('l-' + kind).addEventListener('click', async e => {
+    const b = e.target.closest('[data-del]'); if (!b) return;
+    if (b.dataset.armed !== '1') { // second tap confirms (no confirm() in the viewer)
+      b.dataset.armed = '1'; b.textContent = 'แตะอีกครั้งเพื่อลบ';
+      setTimeout(() => { b.dataset.armed = ''; b.textContent = 'ลบ'; }, 3000);
+      return;
+    }
+    try { ok(await db.from(kind).delete().eq('id', b.dataset.del)); refresh(); } catch (err) { fail(err); }
+  });
+}
+setupList('members', M);
+setupList('heroes', H);
+
+/* ---------- log form ---------- */
+$('date').value = today();
+const key = () => $('date').value + '_' + $('member').value;
+function loadPick() {
+  const t = T.find(x => x.id === key());
+  pick = t ? t.heroes.filter(h => H.has(h)) : [];
+  dirty = false; renderPick();
+}
+function renderMembers() {
+  const sel = $('member'), cur = sel.value;
+  sel.innerHTML = `<option value="">เลือกสมาชิก</option>` +
+    [...M].sort(byName).map(([id, m]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${esc(m.name)}</option>`).join('');
+}
+function renderPick() {
+  $('picked').innerHTML = pick.map(id =>
+    `<button class="chip" data-rm="${id}" aria-label="เอา ${esc(H.get(id)?.name)} ออก">${esc(H.get(id)?.name || '?')}<span>×</span></button>`).join('');
+  const has = !!$('member').value;
+  $('pickHint').textContent = !has ? 'เลือกสมาชิกก่อน' :
+    pick.length ? `${pick.length} ตัว${dirty ? ' · ยังไม่ได้บันทึก' : ' · บันทึกแล้ว'}` : 'ยังไม่ได้เลือกตัวละคร';
+  $('save').disabled = !has || !dirty || saving;
+}
+function matches(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  return [...H].filter(([id, h]) => !pick.includes(id) && h.name.toLowerCase().includes(q))
+    .sort((a, b) => (b[1].name.toLowerCase().startsWith(q) - a[1].name.toLowerCase().startsWith(q)) || byName(a, b))
+    .slice(0, 8);
+}
+function showSug() {
+  const q = $('q').value, list = matches(q), box = $('sug');
+  if (!q.trim()) { box.hidden = true; return; }
+  const lq = q.trim().toLowerCase();
+  box.innerHTML = list.length ? list.map(([id, h]) => {
+    const i = h.name.toLowerCase().indexOf(lq), n = h.name;
+    return `<li><button type="button" data-add="${id}">${esc(n.slice(0, i))}<b>${esc(n.slice(i, i + lq.length))}</b>${esc(n.slice(i + lq.length))}</button></li>`;
+  }).join('') : `<li class="hint" style="padding:10px 12px">ไม่พบ "${esc(q.trim())}" เพิ่มได้ที่แท็บตัวละคร</li>`;
+  box.hidden = false;
+}
+function addHero(id) {
+  if (!$('member').value) { toast('เลือกสมาชิกก่อน'); return; }
+  if (!pick.includes(id)) pick.push(id);
+  dirty = true; $('q').value = ''; $('sug').hidden = true; renderPick(); $('q').focus();
+}
+$('q').addEventListener('input', showSug);
+$('q').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); const m = matches($('q').value)[0]; if (m) addHero(m[0]); }
+  if (e.key === 'Escape') $('sug').hidden = true;
 });
-$('round').onchange = e => { cur = +e.target.value; render(); if (!$('edit').hidden) fillEdit(); };
-$('users').addEventListener('click', e => {
-  const b = e.target.closest('[data-u]'); if (!b) return;
-  me = b.dataset.u; try { localStorage.setItem('maiwar-me', me); } catch {} // remembered per device
-  render();
+$('sug').addEventListener('click', e => { const b = e.target.closest('[data-add]'); if (b) addHero(b.dataset.add); });
+$('picked').addEventListener('click', e => {
+  const b = e.target.closest('[data-rm]'); if (!b) return;
+  pick = pick.filter(x => x !== b.dataset.rm); dirty = true; renderPick();
 });
-$('addRound').onclick = () => {
-  S.rounds.push({ name: 'รอบ ' + (S.rounds.length + 1), used: {} });
-  cur = S.rounds.length - 1; render(); save(); fillEdit();
-};
+$('member').addEventListener('change', loadPick);
+$('date').addEventListener('change', loadPick);
+$('save').addEventListener('click', async () => {
+  const m = $('member').value, d = $('date').value;
+  if (!m || !d || !db || saving) return;
+  saving = true; renderPick();
+  const id = d + '_' + m;
+  try {
+    if (pick.length) ok(await db.from('tally').upsert({ id, date: d, member: m, heroes: pick }));
+    else ok(await db.from('tally').delete().eq('id', id));
+    dirty = false; toast(`บันทึกแล้ว: ${M.get(m)?.name} ${pick.length} ตัว`);
+  } catch (err) { fail(err); }
+  saving = false; renderPick(); refresh();
+});
 
-function fillEdit() {
-  $('roundName').value = S.rounds[cur].name;
-  $('players').value = S.players.join('\n');
-  $('heroes').value = S.groups.map(g => '# ' + g.name + '\n' + g.heroes.join('\n')).join('\n\n');
-  armed = {};
-  $('clearRound').textContent = 'ล้างติ๊กรอบนี้'; $('delRound').textContent = 'ลบรอบนี้';
-}
-function parseHeroes(text) {
-  const groups = [];
-  for (const raw of text.split('\n')) {
-    const l = raw.trim(); if (!l) continue;
-    if (l.startsWith('#')) groups.push({ name: l.slice(1).trim() || 'กลุ่ม', heroes: [] });
-    else { if (!groups.length) groups.push({ name: 'กลุ่ม', heroes: [] }); groups[groups.length - 1].heroes.push(l); }
+/* ---------- dashboard ---------- */
+function renderDash() {
+  const dates = [...new Set([today(), ...T.map(t => t.date)])].sort().reverse();
+  if (!dates.includes(dashDate)) dashDate = dates[0];
+  $('dDate').innerHTML = dates.map(d => `<option value="${d}"${d === dashDate ? ' selected' : ''}>${thDate(d)}${d === today() ? ' (วันนี้)' : ''}</option>`).join('');
+
+  const rows = T.filter(t => t.date === dashDate && M.has(t.member));
+  const usedBy = new Map();
+  rows.forEach(t => t.heroes.forEach(h => { if (!usedBy.has(h)) usedBy.set(h, new Set()); usedBy.get(h).add(t.member); }));
+  const total = M.size, members = [...M].sort(byName);
+  const totalUses = rows.reduce((n, t) => n + t.heroes.filter(h => H.has(h)).length, 0);
+  $('sum').innerHTML = `<div><b>${rows.length}/${total}</b><span>สมาชิกที่บันทึกแล้ว</span></div><div><b>${totalUses}</b><span>ไม้ที่ใช้ไป</span></div>`;
+
+  const q = $('dq').value.trim().toLowerCase();
+  const open = new Set([...document.querySelectorAll('#dash details[open]')].map(d => d.dataset.id));
+  document.querySelectorAll('#by button').forEach(b => b.setAttribute('aria-pressed', b.dataset.by === dashBy));
+  if (dashBy === 'member') {
+    $('dHint').textContent = 'แตะชื่อสมาชิกเพื่อดูว่าใช้ตัวไหนไปบ้าง';
+    const of = new Map(rows.map(t => [t.member, t.heroes.filter(h => H.has(h))]));
+    const ms = members.filter(([, m]) => !q || m.name.toLowerCase().includes(q))
+      .sort((a, b) => (of.get(a[0])?.length || 0) - (of.get(b[0])?.length || 0) || byName(a, b)); // not-yet-logged first
+    $('dash').innerHTML = ms.map(([id, m]) => {
+      const hs = of.get(id) || [];
+      return `<details data-id="${id}"${open.has(id) ? ' open' : ''}><summary>
+        <span class="nm">${esc(m.name)}</span>
+        <span class="nums">${hs.length ? `ใช้ <b>${hs.length}</b> ไม้` : '<b class="zero">ยังไม่ลง</b>'}</span></summary>
+        <div class="who"><div class="chips">${hs.map(h => `<span class="chip plain">${esc(H.get(h).name)}</span>`).join('') || '<span class="hint">ยังไม่มีบันทึกวันนี้</span>'}</div></div></details>`;
+    }).join('') || `<p class="hint" style="padding:16px">${M.size ? 'ไม่พบสมาชิกที่ค้นหา' : 'ยังไม่มีสมาชิก เพิ่มได้ที่แท็บสมาชิก'}</p>`;
+    return;
   }
-  return groups;
+  $('dHint').textContent = 'แตะชื่อตัวละครเพื่อดูว่ายังเหลือกับใครบ้าง';
+  const list = [...H].filter(([, h]) => !q || h.name.toLowerCase().includes(q)).sort(byName);
+  $('dash').innerHTML = list.map(([id, h]) => {
+    const u = usedBy.get(id) || new Set(), left = total - u.size;
+    const leftM = members.filter(([mid]) => !u.has(mid)), usedM = members.filter(([mid]) => u.has(mid));
+    return `<details data-id="${id}"${open.has(id) ? ' open' : ''}><summary>
+      <span class="nm">${esc(h.name)}</span>
+      <span class="nums">ใช้ ${u.size} · เหลือ <b class="${left ? '' : 'zero'}">${left}</b></span>
+      <span class="bar"><i style="width:${total ? u.size / total * 100 : 0}%"></i></span></summary>
+      <div class="who">
+        <p>ยังเหลือ (${leftM.length})</p>
+        <div class="chips">${leftM.map(([, m]) => `<span class="chip plain">${esc(m.name)}</span>`).join('') || '<span class="hint">หมดแล้ว</span>'}</div>
+        ${usedM.length ? `<p>ใช้แล้ว (${usedM.length})</p><div class="chips">${usedM.map(([, m]) => `<span class="chip plain gone">${esc(m.name)}</span>`).join('')}</div>` : ''}
+      </div></details>`;
+  }).join('') || `<p class="hint" style="padding:16px">${H.size ? 'ไม่พบตัวละครที่ค้นหา' : 'ยังไม่มีตัวละคร เพิ่มได้ที่แท็บตัวละคร'}</p>`;
 }
-$('toggleEdit').onclick = () => { const ed = $('edit'); ed.hidden = !ed.hidden; if (!ed.hidden) fillEdit(); };
-$('applyEdit').onclick = () => {
-  S.rounds[cur].name = $('roundName').value.trim() || S.rounds[cur].name;
-  S.players = $('players').value.split('\n').map(s => s.trim()).filter(Boolean);
-  S.groups = parseHeroes($('heroes').value);
-  $('edit').hidden = true; render(); save();
-};
-// Destructive buttons need a second tap (no confirm() in the viewer).
-let armed = {};
-function twoTap(id, act) {
-  $(id).onclick = () => {
-    if (!armed[id]) { armed[id] = 1; $(id).textContent = 'แตะอีกครั้งเพื่อยืนยัน'; return; }
-    act(); fillEdit(); render(); save();
-  };
-}
-twoTap('clearRound', () => { S.rounds[cur].used = {}; });
-twoTap('delRound', () => {
-  if (S.rounds.length === 1) S.rounds[0] = { name: 'รอบ 1', used: {} };
-  else { S.rounds.splice(cur, 1); cur = Math.max(0, cur - 1); }
-});
+$('dDate').addEventListener('change', e => { dashDate = e.target.value; renderDash(); });
+$('dq').addEventListener('input', renderDash);
+$('by').addEventListener('click', e => { const b = e.target.closest('[data-by]'); if (b) { dashBy = b.dataset.by; renderDash(); } });
 
-render();
+function renderAll() {
+  renderList('members', M, 'คน'); renderList('heroes', H, 'ตัว');
+  renderMembers(); renderPick(); renderDash(); route();
+}
+
+/* ---------- data (Supabase) ---------- */
+// shortcut: refreshes every 15 s instead of realtime; switch to Supabase Realtime if guild-mates need instant updates.
+async function refresh() {
+  if (!db || saving) return;
+  const [m, h, t] = await Promise.all([
+    db.from('members').select('id,name'), db.from('heroes').select('id,name'), db.from('tally').select('id,date,member,heroes')]);
+  if (m.error || h.error || t.error) { $('state').textContent = 'โหลดข้อมูลไม่ได้ ลองรีเฟรช'; return; }
+  M.clear(); m.data.forEach(x => M.set(x.id, x));
+  H.clear(); h.data.forEach(x => H.set(x.id, x));
+  T = t.data;
+  $('state').textContent = '';
+  if (!dirty) loadPick();
+  renderAll();
+}
+renderAll();
+if (!SUPABASE_URL || !window.supabase) $('state').textContent = 'ยังไม่ได้ตั้งค่า Supabase';
+else {
+  db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  refresh();
+  setInterval(refresh, 15000);
+  addEventListener('focus', refresh);
+}
 </script>
 </body>
 </html>
