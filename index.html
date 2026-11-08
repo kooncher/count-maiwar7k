@@ -35,6 +35,11 @@ input,select{background:var(--bg);border:1px solid var(--line);border-radius:10p
 .sug button:hover,.sug button:focus-visible,.sug li:first-child button{background:var(--soft)}
 .sug b{color:var(--accent)}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+.av{width:28px;height:28px;border-radius:7px;object-fit:cover;flex:none;background:var(--soft);display:inline-grid;place-items:center;font-size:12px;color:var(--muted);vertical-align:middle;border:0;padding:0}
+.av.lg{width:40px;height:40px;border-radius:9px;cursor:pointer}
+.sug button{display:flex!important;align-items:center;gap:10px}
+summary .nm{display:flex;align-items:center;gap:10px}
+.chip .av{width:22px;height:22px;margin-left:-6px;border-radius:50%}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--soft);border:0;border-radius:999px;padding:6px 8px 6px 12px;font-size:14px}
 .chip span{color:var(--muted);font-size:16px;line-height:1}
 .chip.plain{padding:4px 10px;background:var(--bg);border:1px solid var(--line)}
@@ -162,11 +167,24 @@ function route() {
 addEventListener('hashchange', route);
 
 /* ---------- members / characters lists ---------- */
+// Thumbnail from a pasted image link, or the first letter when there is none.
+const pic = (h, inner) => h?.img
+  ? (inner ? `<img class="av lg" src="${esc(h.img)}" alt="" loading="lazy">` : `<img class="av" src="${esc(h.img)}" alt="" loading="lazy">`)
+  : (inner ? esc((h?.name || '?')[0]) : `<span class="av">${esc((h?.name || '?')[0])}</span>`);
+$('l-heroes').addEventListener('click', async e => {
+  const b = e.target.closest('[data-img]'); if (!b) return;
+  const h = H.get(b.dataset.img);
+  const url = prompt(`วางลิงก์รูปของ ${h.name} (เว้นว่างเพื่อลบรูป)`, h.img || '');
+  if (url === null) return;
+  const v = url.trim();
+  if (v && !/^https:\/\//.test(v)) return toast('ลิงก์รูปต้องขึ้นต้นด้วย https://');
+  try { ok(await db.from('heroes').update({ img: v || null }).eq('id', h.id)); toast('อัปเดตรูปแล้ว'); refresh(); } catch (err) { fail(err); }
+});
 function renderList(kind, map, unit) {
   const items = [...map].sort(byName);
   $('c-' + kind).textContent = `ทั้งหมด ${items.length} ${unit}`;
   $('l-' + kind).innerHTML = items.map(([id, x]) =>
-    `<li><span>${esc(x.name)}</span>${canWrite ? `<button class="del" data-del="${id}" aria-label="ลบ ${esc(x.name)}">ลบ</button>` : ''}</li>`
+    `<li>${kind === 'heroes' ? `<button class="av lg" data-img="${id}" aria-label="ใส่รูป ${esc(x.name)}">${pic(x, true)}</button>` : ''}<span>${esc(x.name)}</span>${canWrite ? `<button class="del" data-del="${id}" aria-label="ลบ ${esc(x.name)}">ลบ</button>` : ''}</li>`
   ).join('') || `<li class="empty">ยังไม่มีรายชื่อ เพิ่มชื่อแรกด้านบน</li>`;
 }
 function setupList(kind, map) {
@@ -206,7 +224,7 @@ function renderMembers() {
 }
 function renderPick() {
   $('picked').innerHTML = pick.map(id =>
-    `<button class="chip" data-rm="${id}" aria-label="เอา ${esc(H.get(id)?.name)} ออก">${esc(H.get(id)?.name || '?')}<span>×</span></button>`).join('');
+    `<button class="chip" data-rm="${id}" aria-label="เอา ${esc(H.get(id)?.name)} ออก">${pic(H.get(id))}${esc(H.get(id)?.name || '?')}<span>×</span></button>`).join('');
   const has = !!$('member').value;
   $('pickHint').textContent = !has ? 'เลือกสมาชิกก่อน' :
     pick.length ? `${pick.length} ตัว${dirty ? ' · ยังไม่ได้บันทึก' : ' · บันทึกแล้ว'}` : 'ยังไม่ได้เลือกตัวละคร';
@@ -224,7 +242,7 @@ function showSug() {
   const lq = q.trim().toLowerCase();
   box.innerHTML = list.length ? list.map(([id, h]) => {
     const i = h.name.toLowerCase().indexOf(lq), n = h.name;
-    return `<li><button type="button" data-add="${id}">${esc(n.slice(0, i))}<b>${esc(n.slice(i, i + lq.length))}</b>${esc(n.slice(i + lq.length))}</button></li>`;
+    return `<li><button type="button" data-add="${id}">${pic(h)}<span>${esc(n.slice(0, i))}<b>${esc(n.slice(i, i + lq.length))}</b>${esc(n.slice(i + lq.length))}</span></button></li>`;
   }).join('') : `<li class="hint" style="padding:10px 12px">ไม่พบ "${esc(q.trim())}" เพิ่มได้ที่แท็บตัวละคร</li>`;
   box.hidden = false;
 }
@@ -284,7 +302,7 @@ function renderDash() {
       return `<details data-id="${id}"${open.has(id) ? ' open' : ''}><summary>
         <span class="nm">${esc(m.name)}</span>
         <span class="nums">${hs.length ? `ใช้ <b>${hs.length}</b> ไม้` : '<b class="zero">ยังไม่ลง</b>'}</span></summary>
-        <div class="who"><div class="chips">${hs.map(h => `<span class="chip plain">${esc(H.get(h).name)}</span>`).join('') || '<span class="hint">ยังไม่มีบันทึกวันนี้</span>'}</div></div></details>`;
+        <div class="who"><div class="chips">${hs.map(h => `<span class="chip plain">${pic(H.get(h))}${esc(H.get(h).name)}</span>`).join('') || '<span class="hint">ยังไม่มีบันทึกวันนี้</span>'}</div></div></details>`;
     }).join('') || `<p class="hint" style="padding:16px">${M.size ? 'ไม่พบสมาชิกที่ค้นหา' : 'ยังไม่มีสมาชิก เพิ่มได้ที่แท็บสมาชิก'}</p>`;
     return;
   }
@@ -294,7 +312,7 @@ function renderDash() {
     const u = usedBy.get(id) || new Set(), left = total - u.size;
     const leftM = members.filter(([mid]) => !u.has(mid)), usedM = members.filter(([mid]) => u.has(mid));
     return `<details data-id="${id}"${open.has(id) ? ' open' : ''}><summary>
-      <span class="nm">${esc(h.name)}</span>
+      <span class="nm">${pic(h)}${esc(h.name)}</span>
       <span class="nums">ใช้ ${u.size} · เหลือ <b class="${left ? '' : 'zero'}">${left}</b></span>
       <span class="bar"><i style="width:${total ? u.size / total * 100 : 0}%"></i></span></summary>
       <div class="who">
@@ -318,7 +336,7 @@ function renderAll() {
 async function refresh() {
   if (!db || saving) return;
   const [m, h, t] = await Promise.all([
-    db.from('members').select('id,name'), db.from('heroes').select('id,name'), db.from('tally').select('id,date,member,heroes')]);
+    db.from('members').select('id,name'), db.from('heroes').select('id,name,img'), db.from('tally').select('id,date,member,heroes')]);
   if (m.error || h.error || t.error) { $('state').textContent = 'โหลดข้อมูลไม่ได้ ลองรีเฟรช'; return; }
   M.clear(); m.data.forEach(x => M.set(x.id, x));
   H.clear(); h.data.forEach(x => H.set(x.id, x));
